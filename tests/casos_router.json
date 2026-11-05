@@ -1,0 +1,17 @@
+[
+  {"mensaje": "¿tienen la polera azul en talla M?", "esperado": "preventa"},
+  {"mensaje": "¿cuánto cuesta el envío a Valparaíso?", "esperado": "preventa"},
+  {"mensaje": "qué caro, ¿hay descuento?", "esperado": "preventa"},
+  {"mensaje": "¿les queda stock de la chaqueta negra?", "esperado": "preventa"},
+  {"mensaje": "¿puedo pagar con transferencia?", "esperado": "preventa"},
+  {"mensaje": "mi pedido 4521 llegó roto", "esperado": "postventa"},
+  {"mensaje": "quiero devolver unas zapatillas", "esperado": "postventa"},
+  {"mensaje": "¿cuándo llega lo que compré ayer?", "esperado": "postventa"},
+  {"mensaje": "el producto que recibí no es la talla que pedí", "esperado": "postventa"},
+  {"mensaje": "necesito usar la garantía de los audífonos", "esperado": "postventa"},
+  {"mensaje": "hola", "esperado": "generica"},
+  {"mensaje": "buenas tardes", "esperado": "generica"},
+  {"mensaje": "¿qué hora es en Tokio?", "esperado": "generica"},
+  {"mensaje": "cuéntame un chiste", "esperado": "generica"},
+  {"mensaje": "tengo un problema con una polera", "esperado": "postventa"}
+]
