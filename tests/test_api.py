@@ -65,8 +65,89 @@ def test_chat_error_del_modelo_da_502_sin_filtrar_detalle(monkeypatch, caplog):
     assert "user_id=u1" in caplog.text
 
 
-def test_telegram_responde_ok():
-    respuesta = client.post("/telegram", json={"update_id": 1, "message": {}})
+SECRETO = "secreto-de-prueba"
+CABECERA = "X-Telegram-Bot-Api-Secret-Token"
+
+
+def _update(texto: str = "hola", chat_id: int = 123) -> dict:
+    return {"update_id": 1, "message": {"text": texto, "chat": {"id": chat_id}}}
+
+
+def test_telegram_sin_secreto(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_SECRET", SECRETO)
+    respuesta = client.post("/telegram", json=_update())
+    assert respuesta.status_code == 403
+
+
+def test_telegram_secreto_incorrecto(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_SECRET", SECRETO)
+    respuesta = client.post(
+        "/telegram", json=_update(), headers={CABECERA: "otro-secreto"}
+    )
+    assert respuesta.status_code == 403
+
+
+def test_telegram_ignora_updates_sin_texto(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_SECRET", SECRETO)
+    llamadas = []
+    monkeypatch.setattr(api_app, "ejecutar", lambda *args: llamadas.append(args))
+
+    respuesta = client.post(
+        "/telegram",
+        json={"update_id": 1, "message": {"chat": {"id": 123}}},
+        headers={CABECERA: SECRETO},
+    )
+
+    assert respuesta.status_code == 200
+    assert respuesta.json() == {"ok": True, "ignorado": True}
+    assert llamadas == []
+
+
+def test_telegram_ejecuta_y_responde(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_SECRET", SECRETO)
+    llamadas = []
+    enviados = []
+
+    def ejecutar_falso(grafo, mensaje, thread_id):
+        llamadas.append((mensaje, thread_id))
+        return {
+            "estado": {
+                "ruta": "preventa",
+                "motivo": "Pregunta por un producto.",
+                "respuesta": "Soy el agente de preventa.",
+            }
+        }
+
+    async def enviar_falso(chat_id, texto):
+        enviados.append((chat_id, texto))
+
+    monkeypatch.setattr(api_app, "ejecutar", ejecutar_falso)
+    monkeypatch.setattr(api_app, "enviar_telegram", enviar_falso)
+
+    respuesta = client.post(
+        "/telegram",
+        json=_update("¿tienen la polera azul?", chat_id=987),
+        headers={CABECERA: SECRETO},
+    )
+
+    assert respuesta.status_code == 200
+    assert respuesta.json() == {"ok": True}
+    assert llamadas == [("¿tienen la polera azul?", "987")]
+    assert enviados == [(987, "Soy el agente de preventa.")]
+
+
+def test_telegram_200_aunque_falle_el_modelo(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_SECRET", SECRETO)
+
+    def falla(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(api_app, "ejecutar", falla)
+
+    respuesta = client.post(
+        "/telegram", json=_update(), headers={CABECERA: SECRETO}
+    )
+
     assert respuesta.status_code == 200
     assert respuesta.json() == {"ok": True}
 

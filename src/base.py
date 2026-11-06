@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import sys
+import warnings
 from functools import lru_cache
 from pathlib import Path
 
@@ -18,6 +19,10 @@ load_dotenv(RAIZ / ".env")
 
 MODELO_POR_DEFECTO = "gemini-3.5-flash-lite"
 NODOS_OCULTOS = ("__start__", "__end__")
+
+# gemini-3.5-flash-lite usa sampling fijo e ignora `temperature`; el aviso es
+# informativo y solo ensucia los logs en cada llamada.
+warnings.filterwarnings("ignore", message=".*fixed sampling defaults.*")
 
 
 @lru_cache(maxsize=None)

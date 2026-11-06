@@ -5,16 +5,27 @@ Documentación:   http://localhost:8000/docs
 """
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+import httpx
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.concurrency import run_in_threadpool
 
 from src.base import MODELO_POR_DEFECTO, cargar_agente, ejecutar
 
 logger = logging.getLogger("ecommerce.router")
+logger.setLevel(logging.INFO)
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    logger.addHandler(_handler)
+# httpx loguea las URLs en INFO: incluiría el token del bot. Nunca.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 RUTAS = ("preventa", "postventa", "generica")
 MENSAJE_502 = "El router no pudo procesar el mensaje. Intenta nuevamente en unos segundos."
@@ -142,6 +153,12 @@ app = FastAPI(
 )
 
 
+@app.get("/", include_in_schema=False)
+def raiz() -> RedirectResponse:
+    """La raíz lleva al Swagger."""
+    return RedirectResponse(url="/docs")
+
+
 @app.get(
     "/health",
     response_model=HealthResponse,
@@ -207,12 +224,84 @@ def chat(entrada: ChatRequest) -> ChatResponse:
     )
 
 
+async def enviar_telegram(chat_id: int, texto: str) -> None:
+    """Envía un mensaje al chat usando la API HTTP de Telegram (solo httpx).
+
+    Nunca se loguea la URL: contiene el token del bot.
+    """
+    token = os.getenv("TELEGRAM_TOKEN")
+    if not token:
+        logger.error("Falta TELEGRAM_TOKEN: no se puede responder en Telegram.")
+        return
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    try:
+        async with httpx.AsyncClient(timeout=30) as cliente:
+            respuesta = await cliente.post(url, json={"chat_id": chat_id, "text": texto})
+    except httpx.HTTPError as error:
+        logger.error("Error de red al enviar a Telegram: %s", type(error).__name__)
+        return
+
+    if respuesta.status_code >= 400:
+        logger.error(
+            "Telegram rechazó sendMessage: %s %s",
+            respuesta.status_code,
+            respuesta.text[:300],
+        )
+
+
 @app.post(
     "/telegram",
     tags=["telegram"],
     include_in_schema=False,
-    summary="Webhook de Telegram (pendiente)",
+    summary="Webhook de Telegram",
 )
-async def telegram() -> dict:
-    """Recibe cualquier JSON y responde ok. Se completa en la parte 5."""
+async def telegram(
+    request: Request,
+    x_telegram_bot_api_secret_token: str | None = Header(
+        default=None, alias="X-Telegram-Bot-Api-Secret-Token"
+    ),
+) -> dict:
+    """Recibe updates de Telegram, los enruta y responde por sendMessage."""
+    esperado = os.getenv("TELEGRAM_SECRET", "")
+    recibido = x_telegram_bot_api_secret_token or ""
+    if not esperado or not hmac.compare_digest(
+        recibido.encode(), esperado.encode()
+    ):
+        raise HTTPException(status_code=403, detail="Secreto de webhook inválido")
+
+    try:
+        update = await request.json()
+    except Exception:
+        return {"ok": True, "ignorado": True}
+
+    if not isinstance(update, dict):
+        return {"ok": True, "ignorado": True}
+
+    mensaje = update.get("message") or {}
+    texto = (mensaje.get("text") or "").strip()
+    chat_id = (mensaje.get("chat") or {}).get("id")
+
+    # Updates sin texto (fotos, stickers, etc.) se ignoran.
+    if not texto or chat_id is None:
+        return {"ok": True, "ignorado": True}
+
+    try:
+        resultado = await run_in_threadpool(
+            ejecutar, GRAFO, texto, str(chat_id)
+        )
+        estado = resultado["estado"]
+        respuesta = estado.get("respuesta") or ""
+        logger.info(
+            "Telegram chat_id=%s ruta=%s motivo=%s",
+            chat_id,
+            estado.get("ruta"),
+            estado.get("motivo"),
+        )
+        if respuesta:
+            await enviar_telegram(chat_id, respuesta)
+    except Exception:
+        # A Telegram se le responde 200 igual, para que no reintente en bucle.
+        logger.exception("Fallo procesando el update de Telegram (chat_id=%s)", chat_id)
+
     return {"ok": True}

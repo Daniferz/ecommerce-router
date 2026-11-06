@@ -106,31 +106,84 @@ python scripts/test_router.py  # tabla de los 15 casos contra el router real
 determinista). Si Gemini no está disponible (sin clave, sin cuota), esos tests
 se omiten con el motivo en el resumen.
 
-## Conectar Telegram
+## Telegram
 
-1. En Telegram, habla con **@BotFather** → `/newbot` → copia el token en
-   `TELEGRAM_TOKEN` (`.env`).
-2. Elige un secreto para el webhook (letras, números, `_` y `-`) y ponlo en
-   `TELEGRAM_SECRET`.
-3. Telegram exige una URL **https pública**: en local no funciona. Despliega
-   primero en Heroku (siguiente sección) y usa esa URL como `PUBLIC_URL`.
-4. Registra el webhook:
+El bot se crea a mano con **@BotFather** y la API habla con Telegram solo con
+`httpx` (sin librerías de bot). Pasos, en orden:
 
-```bash
-curl -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook" \
-  -H "Content-Type: application/json" \
-  -d "{\"url\": \"${PUBLIC_URL}/telegram\", \"secret_token\": \"${TELEGRAM_SECRET}\"}"
-```
+### 1. Crear el bot y configurar Heroku
 
-5. Verifica que quedó registrado:
+En Telegram: **@BotFather** → `/newbot` → copia el token. Elige también un
+secreto para el webhook: **solo** letras, números, `_` y `-` (si usas un
+generador de contraseñas con símbolos como `*%^/<>`, Telegram devuelve
+`400 Bad Request: secret token contains illegal characters`).
 
 ```bash
-curl "https://api.telegram.org/bot${TELEGRAM_TOKEN}/getWebhookInfo"
+heroku config:set TELEGRAM_TOKEN=123456:ABC-tu-token
+heroku config:set TELEGRAM_SECRET=tu-secreto
 ```
 
-Nota: por ahora `POST /telegram` solo responde `{"ok": true}`; el procesamiento
-del mensaje se completa en la parte 5. El secreto se envía en el header
-`X-Telegram-Bot-Api-Secret-Token` para que la API lo valide.
+### 2. Commit y push a GitHub y a Heroku
+
+```bash
+git add .
+git commit -m "telegram"
+git push origin main
+git push heroku main
+```
+
+### 3. Registrar el webhook
+
+En tu `.env` local pon la URL de Heroku (sin barra final):
+
+```
+PUBLIC_URL=https://tu-app.herokuapp.com
+```
+
+```bash
+python scripts/set_webhook.py    # setWebhook con PUBLIC_URL + /telegram
+python scripts/webhook_info.py   # getWebhookInfo: URL y errores pendientes
+```
+
+### 4. Probar con los 6 mensajes
+
+Escríbelos al bot y mira la ruta en los logs:
+
+```bash
+heroku logs --tail
+```
+
+| Mensaje | Ruta esperada |
+|---|---|
+| ¿tienen la polera azul en talla M? | preventa |
+| mi pedido 4521 llegó roto | postventa |
+| hola | generica |
+| ¿cuánto cuesta el envío a Valparaíso? | preventa |
+| quiero devolver unas zapatillas | postventa |
+| ¿qué hora es en Tokio? | generica |
+
+Cada mensaje deja en el log:
+`Telegram chat_id=... ruta=... motivo=...`
+
+### 5. Si no responde, revisa
+
+- El webhook apunta a `https://<tu-app>.herokuapp.com/telegram` (https y
+  terminado en `/telegram`): `python scripts/webhook_info.py`.
+- `TELEGRAM_SECRET` es **idéntico** en `heroku config` y en el `setWebhook`
+  (si no, la API responde 403).
+- `TELEGRAM_TOKEN` es el del bot correcto (`getWebhookInfo` debe dar `ok`).
+- `heroku logs --tail`: ahí aparecen los 403, los 502 del modelo y los errores
+  de `sendMessage`.
+
+### Probar en local antes de desplegar (opcional)
+
+```bash
+cloudflared tunnel --url http://localhost:8000
+```
+
+Usa la URL https que imprime como `PUBLIC_URL` en `.env`, corre
+`python scripts/set_webhook.py` y escríbele al bot. Esa URL cambia cada vez que
+reinicias el túnel: si cambia, vuelve a registrar el webhook.
 
 ## Desplegar en Heroku
 
