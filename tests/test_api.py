@@ -1,10 +1,25 @@
 """Pruebas de la API sin llamar a Gemini (el grafo se reemplaza o se usa 422)."""
 from __future__ import annotations
 
+import pytest
+
 import api.app as api_app
 from fastapi.testclient import TestClient
 
 client = TestClient(api_app.app)
+
+CLAVE_API = "clave-de-prueba"
+CABECERA_API = "X-API-Key"
+
+
+@pytest.fixture(autouse=True)
+def _api_key_de_prueba(monkeypatch):
+    """Fija API_KEY para que las pruebas no dependan del .env local."""
+    monkeypatch.setenv("API_KEY", CLAVE_API)
+
+
+def _con_clave() -> dict[str, str]:
+    return {CABECERA_API: CLAVE_API}
 
 
 def test_health():
@@ -16,13 +31,49 @@ def test_health():
 
 
 def test_chat_sin_texto_da_422():
-    respuesta = client.post("/chat", json={"user_id": "u1"})
+    respuesta = client.post("/chat", json={"user_id": "u1"}, headers=_con_clave())
     assert respuesta.status_code == 422
 
 
 def test_chat_sin_user_id_da_422():
-    respuesta = client.post("/chat", json={"texto": "hola"})
+    respuesta = client.post("/chat", json={"texto": "hola"}, headers=_con_clave())
     assert respuesta.status_code == 422
+
+
+def test_chat_sin_clave_da_401():
+    respuesta = client.post("/chat", json={"user_id": "u1", "texto": "hola"})
+    assert respuesta.status_code == 401
+    assert CABECERA_API in respuesta.json()["detail"]
+
+
+def test_chat_con_clave_incorrecta_da_401():
+    respuesta = client.post(
+        "/chat",
+        json={"user_id": "u1", "texto": "hola"},
+        headers={CABECERA_API: "otra-clave"},
+    )
+    assert respuesta.status_code == 401
+
+
+def test_chat_con_clave_da_200(monkeypatch):
+    monkeypatch.setattr(
+        api_app,
+        "ejecutar",
+        lambda grafo, texto, thread_id: {
+            "estado": {
+                "ruta": "generica",
+                "motivo": "Saludo.",
+                "respuesta": "Hola.",
+            }
+        },
+    )
+    respuesta = client.post(
+        "/chat",
+        json={"user_id": "u1", "texto": "hola"},
+        headers=_con_clave(),
+    )
+    assert respuesta.status_code == 200
+    assert respuesta.json()["ruta"] == "generica"
 
 
 def test_chat_ok(monkeypatch):
@@ -39,7 +90,9 @@ def test_chat_ok(monkeypatch):
         },
     )
     respuesta = client.post(
-        "/chat", json={"user_id": "u1", "texto": "¿tienen la polera azul?"}
+        "/chat",
+        json={"user_id": "u1", "texto": "¿tienen la polera azul?"},
+        headers=_con_clave(),
     )
     assert respuesta.status_code == 200
     assert respuesta.json() == {
@@ -54,7 +107,11 @@ def test_chat_error_del_modelo_da_502_sin_filtrar_detalle(monkeypatch, caplog):
         raise RuntimeError("SECRETO-AIzaSy-123: stack trace interno")
 
     monkeypatch.setattr(api_app, "ejecutar", falla)
-    respuesta = client.post("/chat", json={"user_id": "u1", "texto": "hola"})
+    respuesta = client.post(
+        "/chat",
+        json={"user_id": "u1", "texto": "hola"},
+        headers=_con_clave(),
+    )
 
     assert respuesta.status_code == 502
     assert respuesta.json()["detail"] == api_app.MENSAJE_502
@@ -166,9 +223,16 @@ def test_openapi_metadata_y_ejemplos():
     assert {"salud", "chat", "telegram"} <= tags
 
     chat = openapi["paths"]["/chat"]["post"]
-    for codigo in ("200", "422", "502"):
+    for codigo in ("200", "401", "422", "502"):
         assert codigo in chat["responses"], f"Falta documentar {codigo}"
         assert chat["responses"][codigo]["description"]
+
+    # Swagger debe mostrar el candado y permitir pegar la clave.
+    assert chat["security"] == [{"APIKey": []}]
+    esquema = openapi["components"]["securitySchemes"]["APIKey"]
+    assert esquema["type"] == "apiKey"
+    assert esquema["in"] == "header"
+    assert esquema["name"] == "X-API-Key"
 
     ejemplo = openapi["components"]["schemas"]["ChatRequest"]["example"]
     assert ejemplo["user_id"] and ejemplo["texto"]

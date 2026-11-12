@@ -43,8 +43,9 @@ copy .env.example .env
 En Linux/macOS: `python3.12 -m venv .venv`, `source .venv/bin/activate` y
 `cp .env.example .env`.
 
-Edita `.env` y pega tu `GOOGLE_API_KEY`. El archivo `.env` está en `.gitignore`:
-**nunca** se sube al repositorio.
+Edita `.env` y pega tu `GOOGLE_API_KEY`. Genera también una `API_KEY` para
+proteger `/chat` (ver [Clave de la API](#clave-de-la-api)). El archivo `.env`
+está en `.gitignore`: **nunca** se sube al repositorio.
 
 ## Correr el router en local
 
@@ -68,11 +69,50 @@ uvicorn api.app:app --reload --port 8000
 - OpenAPI: http://localhost:8000/openapi.json
 - Salud: http://localhost:8000/health
 
+## Clave de la API
+
+`POST /chat` está protegido con una clave para que nadie pueda usar tu agente
+(y gastar tu cuota de Gemini) solo con conocer la URL. Se envía en la cabecera
+`X-API-Key` y se compara con la variable de entorno `API_KEY`; si falta o no
+coincide, la API responde **401**. `/health` y `/telegram` siguen abiertos
+(Telegram usa su propio secreto).
+
+### Generar una clave
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+### En local
+
+Ponla en `.env` (nunca se sube al repo):
+
+```
+API_KEY=la-clave-que-generaste
+```
+
+Reinicia uvicorn para que lea la variable.
+
+### En Heroku
+
+```bash
+heroku config:set API_KEY=la-clave-que-generaste
+```
+
+O en el dashboard: **Settings → Config Vars → Reveal Config Vars → Add**.
+Debe ser la **misma** clave que uses desde el cliente.
+
+### Usarla desde Swagger
+
+En `/docs`, pulsa **Authorize**, pega la clave y luego **Try it out** en
+`POST /chat`. El candado indica que el endpoint está protegido.
+
 ### Probar `/chat` con curl
 
 ```bash
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
   -d '{"user_id": "usuario-123", "texto": "¿tienen la polera azul en talla M?"}'
 ```
 
@@ -80,6 +120,7 @@ En Windows usa Git Bash para ese comando o PowerShell:
 
 ```powershell
 Invoke-RestMethod -Method Post -Uri http://localhost:8000/chat `
+  -Headers @{"X-API-Key"=$env:API_KEY} `
   -ContentType "application/json" `
   -Body '{"user_id": "usuario-123", "texto": "¿tienen la polera azul en talla M?"}'
 ```
@@ -92,6 +133,12 @@ Respuesta:
   "motivo": "El cliente pregunta por un producto antes de comprar.",
   "respuesta": "Soy el agente de preventa. Recibí: ..."
 }
+```
+
+Sin la cabecera (o con una clave distinta) la respuesta es:
+
+```json
+{"detail": "Falta o es incorrecta la cabecera X-API-Key."}
 ```
 
 ## Correr las pruebas
@@ -195,6 +242,7 @@ heroku login
 heroku create                      # anota la URL que imprime
 heroku config:set GOOGLE_API_KEY=tu_clave
 heroku config:set MODELO=gemini-3.5-flash-lite
+heroku config:set API_KEY=tu_clave_de_api
 heroku config:set TELEGRAM_TOKEN=tu_token
 heroku config:set TELEGRAM_SECRET=tu_secreto
 heroku config:set PUBLIC_URL=https://tu-app.herokuapp.com

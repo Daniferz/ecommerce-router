@@ -8,11 +8,13 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import secrets
 from typing import Literal
 
 import httpx
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security
 from fastapi.responses import RedirectResponse
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -33,6 +35,30 @@ MENSAJE_502 = "El router no pudo procesar el mensaje. Intenta nuevamente en unos
 # El grafo se compila UNA sola vez, al importar la app.
 # El modelo se crea recién dentro del nodo, así que esto no llama a Gemini.
 GRAFO = cargar_agente("router")
+
+# /chat exige la cabecera X-API-Key; se compara con la variable API_KEY.
+api_key_header = APIKeyHeader(
+    name="X-API-Key",
+    scheme_name="APIKey",
+    description="Clave de la API (variable de entorno API_KEY).",
+    auto_error=False,
+)
+
+
+def verificar_api_key(clave: str | None = Security(api_key_header)) -> None:
+    """Devuelve 401 si falta X-API-Key o no coincide con API_KEY."""
+    esperada = os.getenv("API_KEY", "")
+    recibida = clave or ""
+    if not esperada:
+        logger.error("Falta API_KEY: /chat rechazará todas las peticiones.")
+    if not esperada or not secrets.compare_digest(
+        recibida.encode(), esperada.encode()
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Falta o es incorrecta la cabecera X-API-Key.",
+            headers={"WWW-Authenticate": "APIKey"},
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -131,7 +157,8 @@ app = FastAPI(
         "- **postventa**: quejas, reclamos, seguimiento de pedidos existentes, "
         "devoluciones, cambios, garantía o producto dañado.\n"
         "- **generica**: saludos sin pedido y temas ajenos a la tienda.\n\n"
-        "La conversación se guarda en memoria por `user_id` (thread_id)."
+        "La conversación se guarda en memoria por `user_id` (thread_id).\n\n"
+        "`/chat` exige la cabecera `X-API-Key`; usa **Authorize** en Swagger."
     ),
     openapi_tags=[
         {
@@ -180,10 +207,17 @@ def health() -> HealthResponse:
     summary="Enruta un mensaje de cliente",
     description=(
         "Ejecuta el grafo `router` con `thread_id = user_id` y devuelve la ruta "
-        "elegida, el motivo y la respuesta del agente destino."
+        "elegida, el motivo y la respuesta del agente destino. Exige la "
+        "cabecera `X-API-Key` (variable `API_KEY`)."
     ),
+    dependencies=[Depends(verificar_api_key)],
     responses={
         200: {"description": "El router eligió una ruta y el agente respondió."},
+        401: {
+            "description": (
+                "Falta la cabecera `X-API-Key` o no coincide con `API_KEY`."
+            )
+        },
         422: {
             "model": ErrorValidacion,
             "description": (
