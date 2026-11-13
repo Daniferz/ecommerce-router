@@ -41,14 +41,14 @@ def pulir(state: Estado) -> dict:
     return {"respuesta": pulir_texto(texto_de(salida))}
 
 
-def construir_grafo():
+def construir_grafo(checkpointer=None):
     grafo = StateGraph(Estado)
     grafo.add_node("responder", responder)
     grafo.add_node("pulir", pulir)
     grafo.add_edge(START, "responder")
     grafo.add_edge("responder", "pulir")
     grafo.add_edge("pulir", END)
-    return grafo.compile()
+    return grafo.compile(checkpointer=checkpointer)
 
 
 # Grafo compilado: es lo que importan main.py y la API.

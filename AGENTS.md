@@ -62,6 +62,7 @@ Proyecto Python 3.12 con agentes (LangGraph + Gemini), API FastAPI y despliegue 
 |---|---|
 | `GOOGLE_API_KEY` | Clave de Google AI Studio |
 | `MODELO` | `gemini-3.5-flash-lite` |
+| `DATABASE_URL` | Postgres para la memoria persistente; vacío → RAM |
 | `API_KEY` | Clave que protege `POST /chat` (cabecera `X-API-Key`) |
 | `TELEGRAM_TOKEN` | Lo da @BotFather; vacío hasta el paso 5 |
 | `TELEGRAM_SECRET` | Secreto que Telegram envía en cada webhook para verificarlo |

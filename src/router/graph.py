@@ -72,7 +72,7 @@ def elegir_agente(state: Estado) -> str:
     return state["ruta"]
 
 
-def construir_grafo():
+def construir_grafo(checkpointer=None):
     grafo = StateGraph(Estado)
     grafo.add_node("router", router)
     grafo.add_node("agente_preventa", agente_preventa)
@@ -93,8 +93,9 @@ def construir_grafo():
     grafo.add_edge("agente_postventa", END)
     grafo.add_edge("respuesta_generica", END)
 
-    # Memoria por thread_id (configurable.thread_id al invocar).
-    return grafo.compile(checkpointer=MemorySaver())
+    # Memoria por thread_id (configurable.thread_id al invocar). La API y la
+    # CLI pasan PostgresSaver cuando hay DATABASE_URL; sin él, RAM.
+    return grafo.compile(checkpointer=checkpointer or MemorySaver())
 
 
 app = construir_grafo()

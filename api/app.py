@@ -9,6 +9,7 @@ import hmac
 import logging
 import os
 import secrets
+from contextlib import asynccontextmanager
 from typing import Literal
 
 import httpx
@@ -18,7 +19,14 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
-from src.base import MODELO_POR_DEFECTO, cargar_agente, ejecutar
+from src.base import (
+    MODELO_POR_DEFECTO,
+    abrir_memoria,
+    cargar_agente,
+    cerrar_memoria,
+    ejecutar,
+    memoria_actual,
+)
 
 logger = logging.getLogger("ecommerce.router")
 logger.setLevel(logging.INFO)
@@ -32,9 +40,32 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 RUTAS = ("preventa", "postventa", "generica")
 MENSAJE_502 = "El router no pudo procesar el mensaje. Intenta nuevamente en unos segundos."
 
-# El grafo se compila UNA sola vez, al importar la app.
-# El modelo se crea recién dentro del nodo, así que esto no llama a Gemini.
-GRAFO = cargar_agente("router")
+# El grafo se compila con la memoria que corresponda (Postgres o RAM) la
+# primera vez que se necesita; el modelo se crea dentro del nodo, así que
+# importar la app no llama a Gemini.
+_GRAFO = None
+
+
+def obtener_grafo():
+    global _GRAFO
+    if _GRAFO is None:
+        _GRAFO = cargar_agente(
+            "router", checkpointer=memoria_actual().checkpointer
+        )
+    return _GRAFO
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Abre la memoria al arrancar y cierra el pool al apagar."""
+    global _GRAFO
+    abrir_memoria()
+    obtener_grafo()
+    try:
+        yield
+    finally:
+        cerrar_memoria()
+        _GRAFO = None
 
 # /chat exige la cabecera X-API-Key; se compara con la variable API_KEY.
 api_key_header = APIKeyHeader(
@@ -72,6 +103,13 @@ class HealthResponse(BaseModel):
     modelo: str = Field(
         description="Modelo configurado en la variable MODELO.",
         examples=["gemini-3.5-flash-lite"],
+    )
+    memoria: Literal["ram", "postgres"] = Field(
+        description=(
+            "Dónde se guardan las conversaciones: 'postgres' si DATABASE_URL "
+            "está configurada y respondió, o 'ram' si se usa MemorySaver."
+        ),
+        examples=["postgres"],
     )
 
 
@@ -149,6 +187,7 @@ class ChatResponse(BaseModel):
 app = FastAPI(
     title="Ecommerce Router API",
     version="1.0.0",
+    lifespan=lifespan,
     description=(
         "API del chat de un ecommerce. El endpoint `/chat` recibe el mensaje de "
         "un cliente y lo envía a una de tres rutas:\n\n"
@@ -191,12 +230,16 @@ def raiz() -> RedirectResponse:
     response_model=HealthResponse,
     tags=["salud"],
     summary="Estado del servicio",
-    description="Devuelve `ok` y el modelo configurado. No llama a Gemini.",
+    description=(
+        "Devuelve `ok`, el modelo configurado y qué memoria usa "
+        "(`ram` o `postgres`). No llama a Gemini."
+    ),
 )
 def health() -> HealthResponse:
     return HealthResponse(
         ok=True,
         modelo=os.getenv("MODELO") or MODELO_POR_DEFECTO,
+        memoria=memoria_actual().tipo,
     )
 
 
@@ -235,7 +278,7 @@ def health() -> HealthResponse:
 )
 def chat(entrada: ChatRequest) -> ChatResponse:
     try:
-        resultado = ejecutar(GRAFO, entrada.texto, thread_id=entrada.user_id)
+        resultado = ejecutar(obtener_grafo(), entrada.texto, thread_id=entrada.user_id)
     except Exception:
         # El detalle (incluida la causa) queda solo en el log del servidor.
         logger.exception("Fallo el router para user_id=%s", entrada.user_id)
@@ -322,7 +365,7 @@ async def telegram(
 
     try:
         resultado = await run_in_threadpool(
-            ejecutar, GRAFO, texto, str(chat_id)
+            ejecutar, obtener_grafo(), texto, str(chat_id)
         )
         estado = resultado["estado"]
         respuesta = estado.get("respuesta") or ""

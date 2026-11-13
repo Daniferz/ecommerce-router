@@ -11,7 +11,17 @@ import argparse
 import os
 import sys
 
-from src.base import agentes_disponibles, cargar_agente, ejecutar
+from src.base import (
+    abrir_memoria,
+    agentes_disponibles,
+    cargar_agente,
+    cerrar_memoria,
+    ejecutar,
+)
+
+# En Windows la consola puede ser cp1252 y romper al imprimir "→" o acentos.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,10 +63,14 @@ def main(argv: list[str] | None = None) -> int:
             "Falta GOOGLE_API_KEY en .env (copia .env.example a .env y pega tu clave)."
         )
 
+    memoria = abrir_memoria()
     try:
+        grafo = cargar_agente(args.agente, checkpointer=memoria.checkpointer)
         resultado = ejecutar(grafo, args.mensaje, args.hilo)
     except Exception as error:  # API caída, sin créditos, etc.
         sys.exit(f"Error al ejecutar el agente: {error}")
+    finally:
+        cerrar_memoria()
 
     if args.saltos:
         print("Nodos recorridos: " + (" → ".join(resultado["nodos"]) or "(ninguno)"))

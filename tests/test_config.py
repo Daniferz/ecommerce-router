@@ -8,6 +8,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 CLAVES_ESPERADAS = [
     "GOOGLE_API_KEY",
     "MODELO=gemini-3.5-flash-lite",
+    "DATABASE_URL=postgresql://",
     "TELEGRAM_TOKEN",
     "TELEGRAM_SECRET=cambiame",
     "PUBLIC_URL",
@@ -36,6 +37,8 @@ def test_requirements_con_las_dependencias():
     contenido = (RAIZ / "requirements.txt").read_text(encoding="utf-8")
     for paquete in (
         "langgraph",
+        "langgraph-checkpoint-postgres",
+        "psycopg[binary,pool]",
         "langchain",
         "langchain-google-genai",
         "fastapi",

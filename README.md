@@ -141,6 +141,43 @@ Sin la cabecera (o con una clave distinta) la respuesta es:
 {"detail": "Falta o es incorrecta la cabecera X-API-Key."}
 ```
 
+## Memoria de las conversaciones
+
+El agente guarda el historial por `thread_id` (en `/chat` es el `user_id`). Si
+defines `DATABASE_URL`, usa Postgres (`PostgresSaver`) y las conversaciones
+sobreviven a los reinicios de Heroku. Sin la variable, o si Postgres no responde
+al arrancar, cae a memoria RAM (`MemorySaver`) y deja el motivo en el log.
+
+En local, agrega a `.env`:
+
+```
+DATABASE_URL=postgresql://usuario:clave@host:5432/base
+```
+
+En Heroku:
+
+```bash
+heroku config:set DATABASE_URL=postgresql://...
+```
+
+`GET /health` indica `"memoria": "postgres"` o `"memoria": "ram"`.
+
+Para elegir el hilo desde la terminal:
+
+```bash
+python main.py router "hola" --hilo cliente-123
+```
+
+Para inspeccionar la memoria:
+
+```bash
+python scripts/ver_memoria.py               # hilos, checkpoints y último uso
+python scripts/ver_memoria.py cliente-123   # mensajes de ese hilo
+```
+
+El pool usa mínimo 1 y máximo 2 conexiones, y las tablas se crean solas con
+`setup()` al arrancar.
+
 ## Correr las pruebas
 
 ```bash

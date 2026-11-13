@@ -13,9 +13,10 @@ CABECERA_API = "X-API-Key"
 
 
 @pytest.fixture(autouse=True)
-def _api_key_de_prueba(monkeypatch):
-    """Fija API_KEY para que las pruebas no dependan del .env local."""
+def _entorno_de_prueba(monkeypatch):
+    """Fija API_KEY y evita que las pruebas se conecten a Postgres."""
     monkeypatch.setenv("API_KEY", CLAVE_API)
+    monkeypatch.setenv("DATABASE_URL", "")
 
 
 def _con_clave() -> dict[str, str]:
@@ -28,6 +29,7 @@ def test_health():
     cuerpo = respuesta.json()
     assert cuerpo["ok"] is True
     assert cuerpo["modelo"]
+    assert cuerpo["memoria"] == "ram"
 
 
 def test_chat_sin_texto_da_422():
