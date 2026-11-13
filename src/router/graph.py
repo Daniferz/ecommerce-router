@@ -12,8 +12,9 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
-from src.base import crear_modelo
+from src.base import crear_modelo, texto_de
 from src.router import prompts
+from src.router.tools import contexto_tienda
 
 
 class Decision(BaseModel):
@@ -62,8 +63,26 @@ def agente_postventa(state: Estado) -> dict:
 
 
 def respuesta_generica(state: Estado) -> dict:
-    """Cascarón genérico: no usa el modelo."""
-    respuesta = prompts.PROMPT_GENERICA
+    """Nodo genérico: conversa con el modelo y el contexto de la tienda.
+
+    Recibe todo el historial (`messages`) para saludar por su nombre y mantener
+    el hilo. Si el modelo falla, devuelve la frase fija en vez de propagar el
+    error.
+    """
+    try:
+        mensajes = [
+            SystemMessage(
+                content=prompts.PROMPT_GENERICA.format(ficha=contexto_tienda())
+            ),
+            *state.get("messages", []),
+        ]
+        respuesta = texto_de(crear_modelo().invoke(mensajes))
+    except Exception:  # noqa: BLE001 - si el modelo falla, no se rompe el grafo
+        respuesta = ""
+
+    if not respuesta:
+        respuesta = prompts.RESPUESTA_GENERICA_FIJA
+
     return {"respuesta": respuesta, "messages": [AIMessage(content=respuesta)]}
 
 
