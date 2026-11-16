@@ -67,6 +67,8 @@ Proyecto Python 3.12 con agentes (LangGraph + Gemini), API FastAPI y despliegue 
 | `TELEGRAM_TOKEN` | Lo da @BotFather; vacío hasta el paso 5 |
 | `TELEGRAM_SECRET` | Secreto que Telegram envía en cada webhook para verificarlo |
 | `PUBLIC_URL` | URL https pública; vacío hasta Heroku |
+| `INTEL_URL` | URL del agente de redes (A2A) del curso |
+| `INTEL_TOKEN` | Token Bearer para el agente de redes |
 
 ## Cómo agregar un agente
 

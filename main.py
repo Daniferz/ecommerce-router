@@ -65,6 +65,10 @@ def main(argv: list[str] | None = None) -> int:
 
     memoria = abrir_memoria()
     try:
+        if args.agente == "router":
+            from src.router.reclamos import asegurar_tabla
+
+            asegurar_tabla()
         grafo = cargar_agente(args.agente, checkpointer=memoria.checkpointer)
         resultado = ejecutar(grafo, args.mensaje, args.hilo)
     except Exception as error:  # API caída, sin créditos, etc.

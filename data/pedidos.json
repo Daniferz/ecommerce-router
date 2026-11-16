@@ -1,0 +1,74 @@
+[
+  {
+    "numero": "PED-1001",
+    "cliente": "Ana Pérez",
+    "productos": ["Televisor Samsung 55\" Smart TV 4K"],
+    "fecha_compra": "2026-10-20",
+    "estado": "entregado",
+    "fecha_estimada_entrega": "2026-10-27",
+    "codigo_seguimiento": "NOVA-1001-CL"
+  },
+  {
+    "numero": "PED-1002",
+    "cliente": "Luis Gómez",
+    "productos": ["Celular Xiaomi Redmi Note 14 128 GB"],
+    "fecha_compra": "2026-10-25",
+    "estado": "entregado",
+    "fecha_estimada_entrega": "2026-10-30",
+    "codigo_seguimiento": "NOVA-1002-CL"
+  },
+  {
+    "numero": "PED-1003",
+    "cliente": "Carla Muñoz",
+    "productos": ["Televisor LG 65\" OLED evo"],
+    "fecha_compra": "2026-11-02",
+    "estado": "despachado",
+    "fecha_estimada_entrega": "2026-11-18",
+    "codigo_seguimiento": "NOVA-1003-CL"
+  },
+  {
+    "numero": "PED-1004",
+    "cliente": "Diego Rojas",
+    "productos": ["Celular Samsung Galaxy S25 256 GB", "Cargador 25W"],
+    "fecha_compra": "2026-11-05",
+    "estado": "preparando",
+    "fecha_estimada_entrega": "2026-11-20",
+    "codigo_seguimiento": "NOVA-1004-CL"
+  },
+  {
+    "numero": "PED-1005",
+    "cliente": "Elena Soto",
+    "productos": ["Televisor Hisense 50\" LED 4K"],
+    "fecha_compra": "2026-10-12",
+    "estado": "devuelto",
+    "fecha_estimada_entrega": "2026-10-19",
+    "codigo_seguimiento": "NOVA-1005-CL"
+  },
+  {
+    "numero": "PED-1006",
+    "cliente": "Felipe Vargas",
+    "productos": ["Celular iPhone 16 128 GB"],
+    "fecha_compra": "2026-11-08",
+    "estado": "despachado",
+    "fecha_estimada_entrega": "2026-11-19",
+    "codigo_seguimiento": "NOVA-1006-CL"
+  },
+  {
+    "numero": "PED-1007",
+    "cliente": "Gabriela Díaz",
+    "productos": ["Televisor TCL 55\" QLED"],
+    "fecha_compra": "2026-11-10",
+    "estado": "preparando",
+    "fecha_estimada_entrega": "2026-11-24",
+    "codigo_seguimiento": "NOVA-1007-CL"
+  },
+  {
+    "numero": "PED-1008",
+    "cliente": "Hugo Morales",
+    "productos": ["Celular Motorola Edge 60 256 GB"],
+    "fecha_compra": "2026-10-30",
+    "estado": "entregado",
+    "fecha_estimada_entrega": "2026-11-04",
+    "codigo_seguimiento": "NOVA-1008-CL"
+  }
+]

@@ -207,6 +207,10 @@ def ejecutar(grafo, mensaje: str, thread_id: str = "cli") -> dict:
             estado = chunk
         else:
             nodos.extend(nodo for nodo in chunk if nodo not in NODOS_OCULTOS)
+
+    # El agente de turno registra las herramientas que usó.
+    nodos.extend((estado or {}).get("herramientas") or [])
+
     return {
         "nodos": nodos,
         "respuesta": (estado or {}).get("respuesta", ""),

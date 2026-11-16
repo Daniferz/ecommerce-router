@@ -27,6 +27,7 @@ from src.base import (
     ejecutar,
     memoria_actual,
 )
+from src.router.reclamos import asegurar_tabla
 
 logger = logging.getLogger("ecommerce.router")
 logger.setLevel(logging.INFO)
@@ -60,6 +61,7 @@ async def lifespan(app: FastAPI):
     """Abre la memoria al arrancar y cierra el pool al apagar."""
     global _GRAFO
     abrir_memoria()
+    asegurar_tabla()
     obtener_grafo()
     try:
         yield
